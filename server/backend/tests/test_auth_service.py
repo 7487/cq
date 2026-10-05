@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -43,34 +44,27 @@ class TestAuthServiceLogin:
             await service.login("nobody", "secret123")
 
     async def test_login_verifies_password_even_for_unknown_user(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Unknown usernames must still cost a bcrypt verify (no timing oracle)."""
-        hashes_checked: list[str] = []
+        """An unknown username must still cost a password verify.
 
-        def _recording_verify(password: str, hashed: str) -> bool:
-            hashes_checked.append(hashed)
-            return True  # even a "passing" dummy verify must not log in
-
-        monkeypatch.setattr("cq_server.services.auth.verify_password", _recording_verify)
+        Unequal cost would let response timing reveal which usernames exist.
+        """
+        verify = Mock(return_value=True)
+        monkeypatch.setattr("cq_server.services.auth.verify_password", verify)
         service = AuthService(users=_StubUserRepo(None), jwt_secret="test-secret")  # type: ignore[arg-type]
 
         with pytest.raises(InvalidCredentialsError):
             await service.login("nobody", "secret123")
 
-        assert hashes_checked == [_DUMMY_PASSWORD_HASH]
+        verify.assert_called_once_with("secret123", _DUMMY_PASSWORD_HASH)
 
     async def test_login_raises_invalid_credentials_for_wrong_password(self, monkeypatch: pytest.MonkeyPatch) -> None:
         stored_hash = hash_password("secret123")
         repo = _StubUserRepo({"username": "alice", "password_hash": stored_hash})
         service = AuthService(users=repo, jwt_secret="test-secret")  # type: ignore[arg-type]
-        hashes_checked: list[str] = []
-
-        def _recording_verify(password: str, hashed: str) -> bool:
-            hashes_checked.append(hashed)
-            return verify_password(password, hashed)
-
-        monkeypatch.setattr("cq_server.services.auth.verify_password", _recording_verify)
+        verify = Mock(wraps=verify_password)
+        monkeypatch.setattr("cq_server.services.auth.verify_password", verify)
 
         with pytest.raises(InvalidCredentialsError):
             await service.login("alice", "wrong")
 
-        assert hashes_checked == [stored_hash]
+        verify.assert_called_once_with("wrong", stored_hash)
