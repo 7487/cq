@@ -68,3 +68,19 @@ class TestAuthServiceLogin:
             await service.login("alice", "wrong")
 
         verify.assert_called_once_with("wrong", stored_hash)
+
+    async def test_login_for_unknown_user_never_creates_a_hash(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The first unknown-username login must cost the same as every later one."""
+        monkeypatch.setattr("cq_server.auth.bcrypt.hashpw", Mock(side_effect=AssertionError("hash created")))
+        service = AuthService(users=_StubUserRepo(None), jwt_secret="test-secret")  # type: ignore[arg-type]
+
+        with pytest.raises(InvalidCredentialsError):
+            await service.login("nobody", "secret123")
+
+
+def _bcrypt_variant_and_cost(hashed: str) -> list[str]:
+    return hashed.split("$")[1:3]
+
+
+def test_dummy_hash_work_factor_matches_hash_password() -> None:
+    assert _bcrypt_variant_and_cost(_DUMMY_PASSWORD_HASH) == _bcrypt_variant_and_cost(hash_password("x"))

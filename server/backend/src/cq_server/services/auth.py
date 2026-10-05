@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import asyncio
 
-from ..auth import create_token, hash_password, verify_password
+from ..auth import create_token, verify_password
 from ..exceptions import InvalidCredentialsError
 from ..models.auth import LoginResponse
 from ..repositories import UserRepository
 
-# Bcrypt hash verified against when the username is unknown, so login costs a
-# bcrypt check whether or not the user exists. Computed via ``hash_password``
-# so it always matches the work factor of real password hashes.
-_DUMMY_PASSWORD_HASH = hash_password("cq-timing-equalization-dummy")
+# NOTE: This hash's work factor must equal the one hash_password uses.
+_DUMMY_PASSWORD_HASH = "$2b$12$.Os6vNMQhvC54r..M0HpC../JpIm.DBbugKLmxjtbgRXOsMpz5I1e"  # pragma: allowlist secret
 
 
 class AuthService:
