@@ -28,13 +28,10 @@ class AuthService:
             InvalidCredentialsError: If credentials do not match a user.
         """
         user = await self._users.get(username)
-        if user is None:
-            # Burn a bcrypt verify so unknown usernames take as long as wrong
-            # passwords; otherwise response timing reveals which usernames
-            # exist (username enumeration).
-            verify_password(password, _DUMMY_PASSWORD_HASH)
-            raise InvalidCredentialsError()
-        if not verify_password(password, user["password_hash"]):
+        # Verifying a dummy hash keeps login timing independent of whether the username exists.
+        hashed = _DUMMY_PASSWORD_HASH if user is None else user["password_hash"]
+        password_matches = verify_password(password, hashed)
+        if user is None or not password_matches:
             raise InvalidCredentialsError()
         token = create_token(username, secret=self._jwt_secret)
         return LoginResponse(token=token, username=username)
