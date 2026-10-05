@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from ..auth import create_token, hash_password, verify_password
 from ..exceptions import InvalidCredentialsError
 from ..models.auth import LoginResponse
@@ -30,7 +32,7 @@ class AuthService:
         user = await self._users.get(username)
         # Verifying a dummy hash keeps login timing independent of whether the username exists.
         hashed = _DUMMY_PASSWORD_HASH if user is None else user["password_hash"]
-        password_matches = verify_password(password, hashed)
+        password_matches = await asyncio.to_thread(verify_password, password, hashed)
         if user is None or not password_matches:
             raise InvalidCredentialsError()
         token = create_token(username, secret=self._jwt_secret)
